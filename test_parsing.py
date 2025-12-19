@@ -1,7 +1,7 @@
 import fitz
 import re
 
-PDF_PATH = "1010-2303787_1.pdf"
+PDF_PATH = "test_pdf/1010-2303787_1.pdf"
 print(f"===== {PDF_PATH} 파일 파싱 =====")
 
 CASE_PATTERN = re.compile(r"\d{4}타경\d+")

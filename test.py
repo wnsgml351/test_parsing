@@ -1,6 +1,6 @@
 import fitz
 
-pdf_path = '1010-2303787_1.pdf'
+pdf_path = 'test_pdf/1010-2303787_1.pdf'
 
 doc = fitz.open(pdf_path)
 

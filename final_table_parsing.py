@@ -4,7 +4,7 @@ import os
 import re
 import pandas as pd
 
-target_filename = "2433827_1.pdf"  # 파일명 확인
+target_filename = "test_pdf/2433827_1.pdf"  # 파일명 확인
 base_path = os.getcwd()
 pdf_path = os.path.join(base_path, target_filename)
 

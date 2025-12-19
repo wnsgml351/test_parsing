@@ -6,7 +6,7 @@ from rich.pretty import Pretty
 
 console = Console()
 
-PDF_PATH = "2433827_1.pdf"
+PDF_PATH = "test_pdf/2433827_1.pdf"
 
 # 찾는 패턴 정규식
 DATE_PATTERN = re.compile(r"\d{4}\.\s*\d{1,2}\.\s*\d{1,2}")

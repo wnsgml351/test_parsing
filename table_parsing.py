@@ -155,7 +155,7 @@ def extract_key_info_from_html(html_data):
     return result
 
 # 실행 및 HTML 변환
-df = parse_pdf_to_table("2572788_1.pdf")
+df = parse_pdf_to_table("test_pdf/2572788_1.pdf")
 if df is not None:
     # Pandas를 이용해 깨끗한 HTML 코드로 변환
     html_output = df.to_html(index=False, border=1, justify='center')

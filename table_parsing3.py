@@ -2,7 +2,7 @@ import pdfplumber
 import pandas as pd
 import os
 
-target_filename = "2336499_1.pdf" # 파일명 확인
+target_filename = "test_pdf/2336499_1.pdf"  # 파일명 확인
 base_path = os.getcwd()
 pdf_path = os.path.join(base_path, target_filename)
 output_folder = os.path.join(base_path, "pdf_result")

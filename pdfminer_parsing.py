@@ -35,6 +35,6 @@ def convert_pdf_to_html(pdf_path, output_html_path):
 
 if __name__ == "__main__":
     try:
-        convert_pdf_to_html("1010-2303787_1.pdf", "full_page.html")
+        convert_pdf_to_html("test_pdf/1010-2303787_1.pdf", "full_page.html")
     except Exception as e:
         print(f"오류 발생: {e}")

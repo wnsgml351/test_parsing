@@ -4,9 +4,14 @@ import os
 import re
 import pandas as pd
 
-target_filename = "2433827_1.pdf"  # 파일명 확인
+target_filename = "1010-1915009_1.pdf"  # 파일명 확인
 base_path = os.getcwd()
-pdf_path = os.path.join(base_path, target_filename)
+
+# 대상 폴더명 설정
+target_folder = "test_pdf"
+
+# 폴더 경로를 포함하여 전체 PDF 경로 생성
+pdf_path = os.path.join(base_path, target_folder, target_filename)
 
 print(f"===== {target_filename} 파일을 파싱합니다. =====")
 
@@ -47,7 +52,22 @@ def get_value_next_to_header(df, keyword):
 if os.path.exists(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
 
-        current_name = ""  # 병합된 이름 처리를 위한 변수
+        output_dir = os.path.join(base_path, "pdf_result")
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            print(f"📂 폴더 생성 완료: {output_dir}")
+
+        # 병합된 이름 처리를 위한 변수
+        current_name = ""
+
+        # 이전 배열 요소를 참조하기 위한 변수
+        last_occupant = None
+
+        # 비고 수집 체크 로직
+        is_collecting_bigo = False
+
+        # 비고란 수집 체크 로직
+        is_general_note = False
 
         for p_idx, page in enumerate(pdf.pages):
 
@@ -90,7 +110,6 @@ if os.path.exists(pdf_path):
                         result["auction_rounds"].append(round_data)
 
 
-
             # 하단 좌표 찾기 (마지막 행 인식 보정)
             words = page.extract_words()
             bottom_most = max(word['bottom'] for word in words) if words else page.bbox[3]
@@ -112,7 +131,13 @@ if os.path.exists(pdf_path):
                 table_settings["horizontal_strategy"] = "text"
                 tables = page.extract_tables(table_settings=table_settings)
 
+            # 테이블 페이징 체크 변경
+            tablePageCheck = False
+
             for table in tables:
+
+                tablePageCheck = True
+
                 # 1. 테이블을 데이터프레임으로 변환
                 df = pd.DataFrame(table)
 
@@ -171,12 +196,10 @@ if os.path.exists(pdf_path):
                             if not "".join(row_list) or any(k in "".join(row_list) for k in ["성명", "점유부분", "정보출처"]):
                                 continue
 
+                            # print("row_list", row_list, ", 길이 : ", len(row_list))
                             # 점유자 이름 설정
                             if row_list[0]:
                                 current_name = row_list[0]
-
-                            # print("=" * 60)
-                            # print("row_list", row_list, len(row_list))
 
                             # 루프 시작 시점에 mapping 초기화
                             mapping = {k: "" for k in ["점유부분", "정보출처", "점유의권원", "임대차기간", "보증금", "차임", "전입신고", "확정일자", "배당요구"]}
@@ -205,7 +228,7 @@ if os.path.exists(pdf_path):
                                     "점유의권원": row_list[5],
                                     "임대차기간": row_list[6],
                                     "보증금": row_list[8],
-                                    "차임": row_list[10] if len(row_list) > 10 else "",
+                                    "차임": row_list[10] if (len(row_list) > 10 and row_list[10] != "") else (row_list[11] if len(row_list) > 11 else ""),
                                     "전입신고": row_list[12] if len(row_list) > 12 else "",
                                     "확정일자": row_list[13] if len(row_list) > 13 else "",
                                     "배당요구": row_list[14] if len(row_list) > 14 else "",
@@ -225,9 +248,29 @@ if os.path.exists(pdf_path):
                                     "확정일자": row_list[14],
                                     "배당요구": row_list[15],
                                 }
-                            
+
                             elif len(row_list) == 10:
                                 # print("case2-1: 1페이지에 <비고>가 없고 점유자 리스트가 여러 페이지에 있는 경우 - 1페이지가 아닌 경우 (2433827_1)")
+
+                                # 페이지가 바뀌면서 위의 내용과 연결되어있는지 체크하고 이전 내용에 추가하는 부분
+                                # print("row_list", row_list, tablePageCheck, ((row_list[0]!= "" and row_list[2] == "")  or (row_list[0] == "" and row_list[2] == "")))
+
+                                if tablePageCheck and ((row_list[0]!= "" and row_list[2] == "")  or (row_list[0] == "" and row_list[2] == "")):
+                                    tablePageCheck = False
+                                    if last_occupant:
+                                        last_occupant["name"] = (last_occupant["name"] + " " + row_list[0]).strip()
+                                        last_occupant["unit"] = (last_occupant["unit"] + " " + row_list[1]).strip()
+                                        last_occupant["info_source"] = (last_occupant["info_source"] + " " + row_list[2]).strip()
+                                        last_occupant["occupancy_type"] = (last_occupant["occupancy_type"] + " " + row_list[3]).strip()
+                                        last_occupant["move_in_date"] = (last_occupant["move_in_date"] + " " + row_list[7]).strip()
+                                        last_occupant["confirmed_date"] = (last_occupant["confirmed_date"] + " " + row_list[8]).strip()
+                                        last_occupant["dividend_claim_date"] = (last_occupant["dividend_claim_date"] + " " + row_list[9]).strip()
+                                        last_occupant["deposit"] = (last_occupant["deposit"] + " " + row_list[5]).strip()
+                                        last_occupant["rent"] = (last_occupant["rent"] + " " + row_list[6]).strip()
+                                    continue
+
+                                if tablePageCheck:
+                                    tablePageCheck = False
 
                                 mapping = {
                                     "점유부분": row_list[1],
@@ -248,7 +291,7 @@ if os.path.exists(pdf_path):
                                 "unit": mapping["점유부분"],
                                 "info_source": mapping["정보출처"],
                                 "occupancy_type": mapping["점유의권원"],
-                                # "임대차기간": mapping["임대차기간"],
+                                # "임대차기간": mapping["임대차기간"], # 현재 스키마에 없음
                                 "move_in_date": mapping["전입신고"],
                                 "confirmed_date": mapping["확정일자"],
                                 "dividend_claim_date": mapping["배당요구"],
@@ -256,19 +299,42 @@ if os.path.exists(pdf_path):
                                 "rent": mapping["차임"],
                             }
 
-                            # 실제 내용이 있는 데이터만 추가 (정보출처가 비어있지 않은 경우)
-                            # if temp_data["info_source"]:
+                            # 데이터 추가
                             result["occupants"].append(temp_data)
+
+                            # 방금 넣은거 마지막으로 추가
+                            last_occupant = result["occupants"][-1]
+                            # print("="*60)
+                            # print(last_occupant)
+                            # print("="*60)
 
                 # 권리 및 비고정보 넣기
                 for i in range(len(df)):
                     # 행 전체 텍스트 합치기
                     full_row_text = " ".join([clean_val(v) for v in df.iloc[i].tolist()])
+                    # print("===========")
+                    # print('full_row_text', full_row_text)
+
+                    # <비고> 수집 종료 조건 체크
+                    stop_keywords = ["※ 최선순위 설정일자보다 대항요건을", "등기된 부동산", "매각에 따라 설정된", "비고란", "※1: 매각목적물에서 제외되는"]
+                    if any(k in full_row_text for k in stop_keywords):
+                        # print('해당 키워드 발견 ')
+                        is_collecting_bigo = False
+                        is_general_note = False
 
                     # <비고>
                     if "<비고>" in full_row_text:
-                        bigoStr = full_row_text.replace("<비고>", "")
-                        result["tenant_note"] = bigoStr.strip()
+                        is_collecting_bigo = True
+                        content = full_row_text.replace("<비고>", "").strip()
+                        # print("content", content)
+                        if content:
+                            result["tenant_note"] = (result["tenant_note"] + " " + content).strip()
+                        continue
+
+                    # <비고> 내용 누적 (플래그가 True일 때만 실행)
+                    if is_collecting_bigo:
+                        if full_row_text:  # 빈 행이 아닐 때만
+                            result["tenant_note"] = (result["tenant_note"] + " " + full_row_text).strip()
 
                     # 등기된 부동산에 관한 권리 또는 가처분으로 매각으로 그 효력이 소멸되지 아니하는 것
                     if "등기된 부동산에 관한 권리 또는 가처분으로 매각으로" in full_row_text:
@@ -284,19 +350,39 @@ if os.path.exists(pdf_path):
                             if content:
                                 result["surface_right_summary"] = content
 
+                    # # 비고란
+                    # if "비고란" in full_row_text:
+                    #     if i + 1 < len(df):
+                    #         content = clean_val(df.iloc[i+1, 0])
+                    #         if content:
+                    #             result["general_note"] = content
+
                     # 비고란
                     if "비고란" in full_row_text:
-                        if i + 1 < len(df):
-                            content = clean_val(df.iloc[i+1, 0])
-                            if content:
-                                result["general_note"] = content
+                        is_general_note = True
+                        content = full_row_text.replace("비고란", "").strip()
+                        if content:
+                            result["general_note"] = (result["general_note"] + " " + content).strip()
+                        continue
+
+                    # 비고란 내용 누적 (플래그가 True일 때만 실행)
+                    if is_general_note:
+                        if full_row_text:  # 빈 행이 아닐 때만
+                            result["general_note"] = (result["general_note"] + " " + full_row_text).strip()
 
 
     # 결과 출력 및 저장
     final_json = json.dumps(result, ensure_ascii=False, indent=4)
-    print(final_json)
+    # print(final_json)
 
-    print(f"\n ===== 파싱 완료 =====")
+    # 파일명 설정 (.pdf -> .txt)
+    output_filename = target_filename.replace(".pdf", ".txt")
+    output_path = os.path.join(output_dir, output_filename)
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(final_json)
+
+    print(f"\n===== {target_filename} 파일 파싱 완료했습니다. =====")
 
 else:
     print(f"❌ 파일을 찾을 수 없습니다: {pdf_path}")
