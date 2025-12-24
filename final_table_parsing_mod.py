@@ -4,11 +4,11 @@ import os
 import re
 import pandas as pd
 
-target_filename = "1010-1915009_1.pdf"  # 파일명 확인
+target_filename = "2550415_1.pdf"  # 파일명 확인
 base_path = os.getcwd()
 
 # 대상 폴더명 설정
-target_folder = "test_pdf"
+target_folder = "test_251219"
 
 # 폴더 경로를 포함하여 전체 PDF 경로 생성
 pdf_path = os.path.join(base_path, target_folder, target_filename)
@@ -22,7 +22,7 @@ result = {
     "priority_date": "", # 최선순위권 설정일 및 권리 종류 (예: 2023.10.16. 압류)
     "dividend_end_date": "", # 배당요구종기일
     "document_date": "", # 작성일자
-    "occupants": [], # 점유자별 상세정보
+    "occupants": {}, # 점유자별 상세정보
     "tenant_note": "", # 임차인 관련 비고 전체 문구
     "surviving_rights": "", # 말소되지 않는 권리 목록
     "surface_right_summary": "", # 지상권 관련 문구 전체
@@ -30,9 +30,11 @@ result = {
     "auction_rounds": [], # 회차별 기일정보
 }
 
+# \n -> 한칸 띄어쓰기로 변경 함수
 def clean_val(val):
     return str(val).replace('\n', ' ').strip() if val else ""
 
+# 헤더 찾기 (사건번호, 매각물건번호, 작성일자, 최선순위 설정, 배당요구종기)
 def get_value_next_to_header(df, keyword):
     target_keyword = keyword.replace(" ", "")
     for i in range(len(df)):
@@ -49,6 +51,7 @@ def get_value_next_to_header(df, keyword):
                             return next_val
     return ""
 
+# PDF 파싱 시작
 if os.path.exists(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
 
@@ -65,6 +68,12 @@ if os.path.exists(pdf_path):
 
         # 비고 수집 체크 로직
         is_collecting_bigo = False
+
+        # 말소되지 않는 권리 목록 체크 로직
+        isSurviving_rights = False
+
+        # 지상권 관련 문구 전체 체크 로직
+        isSurfaceRightSummary = False
 
         # 비고란 수집 체크 로직
         is_general_note = False
@@ -140,6 +149,8 @@ if os.path.exists(pdf_path):
 
                 # 1. 테이블을 데이터프레임으로 변환
                 df = pd.DataFrame(table)
+                # print('df', df)
+
 
                 # 데이터가 없는 경우 스킵
                 if df.empty:
@@ -286,8 +297,8 @@ if os.path.exists(pdf_path):
 
                             
                             # 최종 데이터 구조화
-                            temp_data = {
-                                "name": current_name,
+                            details = {
+                                # "name": current_name,
                                 "unit": mapping["점유부분"],
                                 "info_source": mapping["정보출처"],
                                 "occupancy_type": mapping["점유의권원"],
@@ -299,11 +310,18 @@ if os.path.exists(pdf_path):
                                 "rent": mapping["차임"],
                             }
 
-                            # 데이터 추가
-                            result["occupants"].append(temp_data)
+                            # 성명(current_name)이 이미 존재하면 리스트에 추가, 없으면 새로 생성
+                            if current_name not in result["occupants"]:
+                                result["occupants"][current_name] = []
+
+                            result["occupants"][current_name].append(details)
+                            last_occupant = result["occupants"][current_name][-1]
+
+                            # # 데이터 추가
+                            # result["occupants"].append(temp_data)
 
                             # 방금 넣은거 마지막으로 추가
-                            last_occupant = result["occupants"][-1]
+                            # last_occupant = result["occupants"][-1]
                             # print("="*60)
                             # print(last_occupant)
                             # print("="*60)
@@ -320,6 +338,8 @@ if os.path.exists(pdf_path):
                     if any(k in full_row_text for k in stop_keywords):
                         # print('해당 키워드 발견 ')
                         is_collecting_bigo = False
+                        isSurviving_rights = False
+                        isSurfaceRightSummary = False
                         is_general_note = False
 
                     # <비고>
@@ -338,24 +358,29 @@ if os.path.exists(pdf_path):
 
                     # 등기된 부동산에 관한 권리 또는 가처분으로 매각으로 그 효력이 소멸되지 아니하는 것
                     if "등기된 부동산에 관한 권리 또는 가처분으로 매각으로" in full_row_text:
-                        if i + 1 < len(df):
-                            content = clean_val(df.iloc[i+1, 0])
-                            if content:
-                                result["surviving_rights"] = content.strip()
+                        isSurviving_rights = True
+                        content = full_row_text.replace("등기된 부동산에 관한 권리 또는 가처분으로 매각으로 그 효력이 소멸되지 아니하는 것", "").strip()
+                        if content:
+                            result["surviving_rights"] = (result["surviving_rights"] + " " + content).strip()
+                        continue
+
+                    # "등기된 부동산에 관한 권리 또는 가처분으로 매각으로 그 효력이 소멸되지 아니하는 것" 내용 누적 (플래그가 True일 때만 실행)
+                    if isSurviving_rights:
+                        if full_row_text:  # 빈 행이 아닐 때만
+                            result["surviving_rights"] = (result["surviving_rights"] + " " + full_row_text).strip()
+
 
                     # 매각에 따라 설정된 것으로 보는 지상권의 개요
                     if "매각에 따라 설정된 것으로 보는 지상권의 개요" in full_row_text:
-                        if i + 1 < len(df):
-                            content = clean_val(df.iloc[i+1, 0])
-                            if content:
-                                result["surface_right_summary"] = content
+                        isSurfaceRightSummary = True
+                        content = full_row_text.replace("매각에 따라 설정된 것으로 보는 지상권의 개요", "").strip()
+                        if content:
+                            result["surface_right_summary"] = (result["surface_right_summary"] + " " + content).strip()
+                        continue
 
-                    # # 비고란
-                    # if "비고란" in full_row_text:
-                    #     if i + 1 < len(df):
-                    #         content = clean_val(df.iloc[i+1, 0])
-                    #         if content:
-                    #             result["general_note"] = content
+                    if isSurfaceRightSummary:
+                        if full_row_text:  # 빈 행이 아닐 때만
+                            result["surface_right_summary"] = (result["surface_right_summary"] + " " + full_row_text).strip()
 
                     # 비고란
                     if "비고란" in full_row_text:
